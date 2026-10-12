@@ -1,7 +1,7 @@
 """Fit the band-colour model from labelled captures and report honest accuracy.
 
     python3 main/calibrate.py                                   # fit on captures/<label>_NNN.jpg
-    python3 main/calibrate.py --dir captures/white_bg_captures_b2   # fit on a specific folder
+    python3 main/calibrate.py --dir captures/white_bg_captures_b2 captures/white_bg_captures_b3   # one or more folders
 
 The label in each filename gives the expected band sequence (resistor_cv.VALUES), so no hand
 labelling of bands is needed. Each colour is modelled as an independent Gaussian over
@@ -77,11 +77,11 @@ def fit(data, iters=4):
 def main():
     ap = argparse.ArgumentParser()
     here = os.path.dirname(os.path.abspath(__file__))
-    ap.add_argument("--dir", default=os.path.join(here, "..", "captures"))
+    ap.add_argument("--dir", nargs="+", default=[os.path.join(here, "..", "captures")], help="one or more folders of <label>_NNN.jpg")
     ap.add_argument("--out", default=os.path.join(here, "color_model.json"))
     args = ap.parse_args()
 
-    files = sorted(p for p in glob.glob(os.path.join(args.dir, "*.jpg")) if parse(p))
+    files = sorted(p for d in args.dir for p in glob.glob(os.path.join(d, "*.jpg")) if parse(p))
     if not files:
         raise SystemExit("no labelled captures found")
     names, data, skipped = [], [], []

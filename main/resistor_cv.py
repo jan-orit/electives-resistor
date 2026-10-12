@@ -24,8 +24,12 @@ def _lab(bgr):
     return cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB).astype(np.float32)
 
 
-def find_body(frame):
-    """Return (contour, mask) of the most plausible resistor body, or (None, None)."""
+def find_body(frame, roi=None):
+    """Return (contour, mask) of the most plausible resistor body, or (None, None).
+
+    roi = (x1, y1, x2, y2) restricts the search to that box (the YOLO detection); everything
+    outside it is ignored, so clutter elsewhere in the frame cannot be mistaken for the resistor.
+    """
     h, w = frame.shape[:2]
     blur = cv2.GaussianBlur(frame, (9, 9), 0)
     lab = _lab(blur)
@@ -40,6 +44,11 @@ def find_body(frame):
     de = 6 * np.linalg.norm(shift, axis=2)
     de8 = np.clip(de, 0, 255).astype(np.uint8)
     _, mask = cv2.threshold(de8, MASK_DE, 255, cv2.THRESH_BINARY)
+    if roi is not None:
+        x1, y1, x2, y2 = (int(v) for v in roi)
+        keep = np.zeros_like(mask)
+        keep[max(0, y1):max(0, y2), max(0, x1):max(0, x2)] = 255
+        mask = cv2.bitwise_and(mask, keep)
     # A black band is as dark as black paper and punches a gap in the mask: bridge it along x.
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (61, 3)))
     k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (LEAD_OPEN, LEAD_OPEN))
@@ -311,10 +320,10 @@ def load_model(path=None):
     return {c: (tuple(v["mu"]), tuple(v["sd"])) for c, v in raw["colors"].items()}, raw.get("reject", {})
 
 
-def read_resistor(frame, model=None):
+def read_resistor(frame, model=None, roi=None):
     """Full pipeline. Always returns a dict; ohms is None when it can't be read confidently."""
     out = {"ohms": None, "label": None, "bands": [], "reason": "", "crop": None, "box": None}
-    cnt, mask = find_body(frame)
+    cnt, mask = find_body(frame, roi)
     if cnt is None:
         out["reason"] = "no-body"
         return out
